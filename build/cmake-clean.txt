@@ -1,0 +1,4 @@
+FindShapeLibVersion.cmake
+include
+install_manifest.txt
+share

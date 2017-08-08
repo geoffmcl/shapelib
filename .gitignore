@@ -40,3 +40,7 @@ test.dbf
 #Version control
 CVS
 .cvsignore
+
+# backup files
+*.bak
+*~

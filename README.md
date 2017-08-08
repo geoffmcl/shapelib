@@ -1,25 +1,28 @@
+shapelib project
+----------------
+
+This is a `fork` of a `clone` of the orginal **cvs** repository.
 
 Building on Unix
 ----------------
 
-1) run ./configure to generate build scripts
-   Note: type ./configure --help for a list of fine-tuning options
-
-2) type "make" 
-
-3) type "make check" to perform self-tests
-
-4) type "make install" to install
-
+ 1) $ cd build # get into the out-of-source build folder
+ 2) $ cmake .. [options] # to generate native Makefiles
+ 3) $ make # build the project
+ 4) $ if desireable, $ [sudo] make install # to install
 
 Building on Windows
 -------------------
 
 If you have run the VC++ VCVARS32.BAT, you should be able to type the 
-following in a command window to build the code and executables:
+following in the command window to build the code and executables:
 
-C:>  nmake /f makefile.vc 
+```
+ > cd build # get into the out-of-source build folder
+ > cmake .. [options] # to generate native build files
+ > cmake --build . --config Release # build the project
+ > cmake --build . --config Release --taqrget INSTALL # If you have set an instal l location
 
-Otherwise create your own VC++ project.  There aren't many files to deal with
-here!
-
+The `build` folder contains a **build-me.bat**, which should work if you have MSVC14 2015 install, or as modified for your MSVC install.
+ 
+; eof

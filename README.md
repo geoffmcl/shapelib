@@ -22,7 +22,14 @@ following in the command window to build the code and executables:
  > cmake .. [options] # to generate native build files
  > cmake --build . --config Release # build the project
  > cmake --build . --config Release --taqrget INSTALL # If you have set an instal l location
+```
 
-The `build` folder contains a **build-me.bat**, which should work if you have MSVC14 2015 install, or as modified for your MSVC install.
- 
+The `build` folder contains a **build-me.bat**, which should work if you have MSVC14 2015 install, or as modified for your environment, MSVC install.
+
+CMake Options include:
+---------------------
+
+ - -DCMAKE_BUILD_TYPE=Release|Debug = Quite important in unix
+ - -DCMAKE_INSTALL_PREFIX:PATH=X:/3rdParty.x64 = Set the install root location
+
 ; eof

@@ -1,7 +1,7 @@
 shapelib project
 ----------------
 
-This is a `fork` of a `clone` of the orginal **cvs** repository.
+This is a `fork` of a `clone` of the orginal **cvs** repository. The `master` branch is the **original** clone. The **default** `next` branch is the current workings.
 
 Building on Unix
 ----------------
@@ -31,5 +31,9 @@ CMake Options include:
 
  - -DCMAKE_BUILD_TYPE=Release|Debug = Quite important in unix
  - -DCMAKE_INSTALL_PREFIX:PATH=X:/3rdParty.x64 = Set the install root location
+
+If you have a question, or find a bug, please file an [issue](https://github.com/geoffmcl/shapelib/issues) ... or `fork`, and present a [Pull Request](https://github.com/geoffmcl/shapelib/pulls) ... thanks...
+
+Enjoy, geoff.
 
 ; eof

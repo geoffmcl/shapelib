@@ -20,7 +20,10 @@
 
 # It is a fatal error if no working C compiler is available to build
 # the shapelib library and utilities
-project(shapelib C)
+
+# 2017-08-08 Forked the clone of the CVS repo
+# By default C, CXX are enabled, so no need to add 'C'
+project(shapelib)
 
 #message(STATUS "CMake version = ${CMAKE_VERSION}")
 #message(STATUS "CMAKE_SYSTEM_NAME = ${CMAKE_SYSTEM_NAME}")
@@ -30,24 +33,34 @@ cmake_minimum_required(VERSION 2.8.5 FATAL_ERROR)
 
 # libraries are all shared by default.
 cmake_policy( SET CMP0026 OLD )
-option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 if ( WIN32 )
-    set(BUILD_SHARED_LIBS OFF)
+    option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+else()
+    option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 endif()
 
 # Use rpath?
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   # No rpath on Darwin. Setting it will only cause trouble.
 else(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-  option(USE_RPATH "Use -rpath when linking libraries, executables" ON)
+  if (WIN32)
+    option(USE_RPATH "Use -rpath when linking libraries, executables" OFF)
+  else ()
+    option(USE_RPATH "Use -rpath when linking libraries, executables" ON)
+  endif ()  
 endif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+
+option(BUILD_EXECUTABLES "Set OFF to avoid building executables" ON)
 
 # In windows all created dlls are gathered in the dll directory
 # if you add this directory to your PATH all shared libraries are available
 set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 
 set(PACKAGE shp)
-set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR})
+
+# OOPS - Why is this being overridden??????
+# set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR})
+
 # Set up install locations.
 set(
   CMAKE_INSTALL_BINDIR bin
@@ -69,6 +82,11 @@ set(
   CACHE PATH "install location for read-only architecture-independent shp data"
   )
 
+if (MSVC)
+    # to distinguish between debug and release libs
+    set( CMAKE_DEBUG_POSTFIX "d" )
+endif ()
+
 # Export build information to help other projects link installed
 # shapelib software.  Only one of these signatures is required
 # for the export_shp name.
@@ -82,6 +100,7 @@ set(lib_SRC
   safileio.c
   shptree.c
   sbnsearch.c
+  shapefil.h
   )
 option(SHP_DROP_UNABLE_TO_OPEN_MSG "Drop \"unable to open\" error messages" ON)
 if(SHP_DROP_UNABLE_TO_OPEN_MSG)
@@ -94,7 +113,8 @@ endif(SHP_DROP_UNABLE_TO_OPEN_MSG)
 
 add_library(shp ${lib_SRC})
 
-if(WIN32 AND NOT CYGWIN)
+# not sure this is ever required!?
+if(WIN32 AND BUILD_SHARED_LIBS AND NOT CYGWIN)
   set_target_properties(shp
     PROPERTIES
     COMPILE_DEFINITIONS SHAPELIB_DLLEXPORT
@@ -125,9 +145,12 @@ if(USE_RPATH)
     )
 endif(USE_RPATH)
 
+# deal with installing STATIC and/or SHARED library
 install(TARGETS shp
   EXPORT export_shp
-  DESTINATION lib
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
   )
 
 # executables to be built and installed.
@@ -151,7 +174,6 @@ elseif ( NOT WIN32 )
 endif(BASH_EXECUTABLE AND SED_EXECUTABLE)
 
 set(BUILD_TEST OFF)
-set(BUILD_EXECUTABLES OFF)
 # For the first series of tests, the user needs to have downloaded
 # from http://dl.maptools.org/dl/shapelib/shape_eg_data.zip, unpacked
 # that file, and specified the location of that directory with
@@ -170,16 +192,19 @@ if ( BUILD_EXECUTABLES )
       add_executable(${executable} ${executable}.c)
       target_link_libraries(${executable} shp)
       if(USE_RPATH)
-	set_target_properties(${executable}
-	  PROPERTIES
-	  INSTALL_RPATH "${CMAKE_INSTALL_LIBDIR}"
-	  )
+        set_target_properties(${executable}
+        PROPERTIES
+        INSTALL_RPATH "${CMAKE_INSTALL_LIBDIR}"
+        )
       endif(USE_RPATH)
       if(BUILD_TEST)
-	get_target_property(${executable}_LOC ${executable} LOCATION)
-	file(APPEND ${CMAKE_CURRENT_BINARY_DIR}/script.sed "s?\\./${executable}?${${executable}_LOC}?\n")
+        get_target_property(${executable}_LOC ${executable} LOCATION)
+        file(APPEND ${CMAKE_CURRENT_BINARY_DIR}/script.sed "s?\\./${executable}?${${executable}_LOC}?\n")
       endif(BUILD_TEST)
       install(TARGETS ${executable} DESTINATION ${CMAKE_INSTALL_BINDIR})
+      if (MSVC)
+        set_target_properties(${executable} PROPERTIES DEBUG_POSTFIX d )
+      endif ()
     endforeach(executable ${executables})
 endif(BUILD_EXECUTABLES)
 
@@ -236,3 +261,5 @@ if(BUILD_TEST)
     COMMAND ${BASH_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/sed_scripted_test3.sh
     )
 endif(BUILD_TEST)
+
+# eof

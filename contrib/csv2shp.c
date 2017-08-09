@@ -71,7 +71,14 @@ Email: <http://springsrescuemission.org/email.php?recipient=webmaster>
 
 */
 
+#ifdef _MSC_VER
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+#pragma warning( disable: 4267) // conversion from 'size_t' to 'int', possible loss of data
+#endif // #ifdef _MSC_VER
 
+#include <sys/types.h> // for 'off_t', ... in WIN32
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -80,6 +87,9 @@ Email: <http://springsrescuemission.org/email.php?recipient=webmaster>
 #include "regex.h"
 
 #define MAX_COLUMNS 30
+#ifdef _MSC_VER
+#define strcasecmp _stricmp
+#endif
 
 typedef struct column_t {
 	DBFFieldType eType;

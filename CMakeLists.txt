@@ -51,6 +51,7 @@ else(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 endif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 
 option(BUILD_EXECUTABLES "Set OFF to avoid building executables" ON)
+option(BUILD_CONTRIB_ITEMS "Set OFF to not build 'contrib' components" ON)
 
 # In windows all created dlls are gathered in the dll directory
 # if you add this directory to your PATH all shared libraries are available
@@ -92,6 +93,9 @@ endif ()
 # for the export_shp name.
 install(EXPORT export_shp DESTINATION ${CMAKE_INSTALL_SHP_DATADIR})
 
+# show where EXE built
+add_definitions( -DBUILD_DIR="${CMAKE_BINARY_DIR}" )
+
 # Initial boilerplate done, now build library and executables.
 
 set(lib_SRC
@@ -112,6 +116,7 @@ if(SHP_DROP_UNABLE_TO_OPEN_MSG)
 endif(SHP_DROP_UNABLE_TO_OPEN_MSG)
 
 add_library(shp ${lib_SRC})
+list(APPEND add_LIBS shp)
 
 # not sure this is ever required!?
 if(WIN32 AND BUILD_SHARED_LIBS AND NOT CYGWIN)
@@ -119,7 +124,7 @@ if(WIN32 AND BUILD_SHARED_LIBS AND NOT CYGWIN)
     PROPERTIES
     COMPILE_DEFINITIONS SHAPELIB_DLLEXPORT
     )
-endif(WIN32 AND NOT CYGWIN)
+endif()
 
 if(UNIX)
     find_library(M_LIB m)
@@ -208,6 +213,25 @@ if ( BUILD_EXECUTABLES )
     endforeach(executable ${executables})
 endif(BUILD_EXECUTABLES)
 
+# use code from shpdump to output as simple xgraph (*.xg) format
+set(executable shp2xg)
+add_executable(${executable} ${executable}.cxx )
+target_link_libraries(${executable} shp)
+if(USE_RPATH)
+    set_target_properties(${executable}
+      PROPERTIES
+      INSTALL_RPATH "${CMAKE_INSTALL_LIBDIR}"
+      )
+endif()
+if(BUILD_TEST)
+    get_target_property(${executable}_LOC ${executable} LOCATION)
+    file(APPEND ${CMAKE_CURRENT_BINARY_DIR}/script.sed "s?\\./${executable}?${${executable}_LOC}?\n")
+endif()
+  install(TARGETS ${executable} DESTINATION ${CMAKE_INSTALL_BINDIR})
+if (MSVC)
+    set_target_properties( ${executable} PROPERTIES DEBUG_POSTFIX d )
+endif ()
+
 # Install header
 install(FILES shapefil.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
@@ -261,5 +285,24 @@ if(BUILD_TEST)
     COMMAND ${BASH_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/sed_scripted_test3.sh
     )
 endif(BUILD_TEST)
+
+if (BUILD_CONTRIB_ITEMS)
+    include_directories( ${CMAKE_SOURCE_DIR} )  # for shapefil.h
+    if (CMAKE_INSTALL_PREFIX)
+        include_directories( ${CMAKE_INSTALL_PREFIX}/include )  # for regex.h
+        link_directories( ${CMAKE_INSTALL_PREFIX}/lib ) # for regex.lib
+        list(APPEND add_LIBS regex)
+    endif ()
+    set(name csv2shp)
+    set(dir contrib)
+    set(${name}_SRCS
+        ${dir}/${name}.c
+        )
+    add_executable( ${name} ${${name}_SRCS} )
+    target_link_libraries(${name} ${add_LIBS})
+    if (MSVC)
+        set_target_properties(${name} PROPERTIES DEBUG_POSTFIX d )
+    endif ()
+endif ()
 
 # eof

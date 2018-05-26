@@ -472,17 +472,21 @@ int main( int argc, char ** argv )
                         if (pszPartType && *pszPartType && VERB2)
                             fprintf(output, "# PartType %s\n", pszPartType);
 
-                        fprintf(output, "%.15g %.15g\n",
+                        fprintf(output, "%.15g %.15g ; %.15g\n",
                             psShape->padfX[j],
-                            psShape->padfY[j]);
+                            psShape->padfY[j],
+                            psShape->padfZ[j]
+                        );
                     }
                     else {
                         if (pszPartType && *pszPartType && VERB2)
                             fprintf(output, "# PartType %s\n", pszPartType);
 
-                        fprintf(output, "%.15g %.15g\n",
+                        fprintf(output, "%.15g %.15g ; %.15g\n",
                             psShape->padfX[j],
-                            psShape->padfY[j]);
+                            psShape->padfY[j],
+                            psShape->padfZ[j]
+                        );
                     }
                     add_bbox(&b, psShape->padfY[j], psShape->padfX[j]);
                 }

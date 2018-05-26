@@ -6,6 +6,7 @@
  *           the terminal in xgraph form.
  * Author:   Geoff R. McLane, reports _AT_ geoffair _DOT_ info
  *
+ * 20170810: Add user output file
  * 20170806: Add option to set a bounding box, inclusive or exclusive
  * --bbox minlon,minlat,maxlon,maxlat
  *
@@ -43,6 +44,9 @@
  * initial cut
  *
  */
+#ifdef _MSC_VER
+#pragma warning( disable: 4996 )
+#endif
 
 #include <string.h>
 #include <stdlib.h>
@@ -65,6 +69,10 @@ typedef std::vector<LL> vLL;
 static vSTG vInputs;
 static int verbosity = 0;
 static PBBOX pBBox = 0;
+static FILE *output = stdout;
+static char *out_file = 0;
+static bool add_bounds = false;
+static char *xg_color = 0;
 
 #define VERB1 (verbosity >= 1)
 #define VERB2 (verbosity >= 2)
@@ -83,13 +91,16 @@ static void show_help()
     printf("shp2xg [options] shp_file [shp_file2 [... shp_filen]]\n");
     printf("options:\n");
     printf(" --help        (-h or -?) = This help and exit (0)\n");
+    printf(" --add               (-a) = Add bounding box to output. (def=%s)\n", (add_bounds ? "Yes" : "No"));
+    printf(" --color <color>     (-c) = Add color to the output xg. (def=%s)\n", (xg_color ? xg_color : "none"));
     printf(" --bbox <box>        (-b) = Set bounding box. box=min.lon,min.lat,max.lon,max.lat\n");
+    printf(" --out <file>        (-o) = Set output file. Implies min. verbosity. (def=%s)\n", (out_file ? out_file : "stdout"));
     printf(" --verb[nn]          (-v) = Bump (or set nn) verbosity. (def=%d)\n", verbosity);
     printf("\n");
     printf(" If given the base name of a shape file, read and show information about\n");
     printf(" that shapefile. Given a minimum verbosity of 1, show each of the vertices\n");
     printf(" given. If given a valid bbox, which implies a minimum verbosity, only show\n");
-    printf(" when any one of the shape lies within that bbox.\n");
+    printf(" when the shape bound or middle, lies within that bbox.\n");
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -188,6 +199,7 @@ bool bbox_valid(PBBOX pb)
         return false;
     return true;
 }
+
 bool in_bbox(PBBOX pb, double lat, double lon)
 {
     if ((lat >= pb->min_lat) &&
@@ -196,6 +208,26 @@ bool in_bbox(PBBOX pb, double lat, double lon)
         (lon <= pb->max_lon))
         return true;
     return false;
+}
+
+void set_bbox(PBBOX pb)
+{
+    pb->max_lat = -400.0;
+    pb->min_lat = 400.0;
+    pb->max_lon = -400.0;
+    pb->min_lon = 400.0;
+}
+
+void add_bbox(PBBOX pb, double lat, double lon)
+{
+    if (lat < pb->min_lat)
+        pb->min_lat = lat;
+    if (lat > pb->max_lat)
+        pb->max_lat = lat;
+    if (lon < pb->min_lon)
+        pb->min_lon = lon;
+    if (lon > pb->max_lon)
+        pb->max_lon = lon;
 }
 
 
@@ -207,6 +239,7 @@ int main( int argc, char ** argv )
     double 	adfMinBound[4], adfMaxBound[4];
     int give_help = 0;
     char *currArg, *sarg;
+    BBOX b;
 
     for (a = 1; a < argc; a++) {
         a2 = a + 1;
@@ -217,9 +250,23 @@ int main( int argc, char ** argv )
             while (*sarg == '-') sarg++;
             c = *sarg;
             switch (c) {
+            case 'c':
+                if (a2 < argc) {
+                    a++;
+                    sarg = argv[a];
+                    xg_color = strdup(sarg);
+                }
+                else {
+                    fprintf(stderr, "# Error: Expected color to follow arg '%s'! Try '-?'\n", currArg);
+                    return 1;
+                }
+                break;
             case 'h':
             case '?':
                 give_help = 1;
+                break;
+            case 'a':
+                add_bounds = true;
                 break;
             case 'b':
                 if (a2 < argc) {
@@ -262,6 +309,17 @@ int main( int argc, char ** argv )
                     sarg++;
                 }
                 break;
+            case 'o':
+                if (a2 < argc) {
+                    a++;
+                    sarg = argv[a];
+                    out_file = strdup(sarg);
+                }
+                else {
+                    fprintf(stderr, "# Error: Expected file name to follow arg '%s'! Try '-?'\n", currArg);
+                    return 1;
+                }
+                break;
             default:
                 show_help();
                 fprintf(stderr, "# Error: Unknown arg '%s'! Try '-?'\n", currArg);
@@ -287,13 +345,24 @@ int main( int argc, char ** argv )
         fprintf( stderr, "# Error: No shape file names found in command line!\n");
         return 1;
     }
-    if (pBBox && !VERB1)
+    if ((pBBox || out_file) && !VERB1)
         verbosity = 1;
+
+    if (out_file) {
+        output = fopen(out_file, "w");
+        if (!output) {
+            fprintf(stderr, "# Error: Unable to open out file '%s'!\n", out_file);
+            return 1;
+        }
+
+    }
+
+    set_bbox(&b);   // set invlaid values
 
 /* -------------------------------------------------------------------- */
 /*      Open the passed shapefiles.                                      */
 /* -------------------------------------------------------------------- */
-    printf("# Processing %d assumed shapefiles...\n", cnt);
+    fprintf(output, "# Processing %d assumed shapefiles...\n", cnt);
     //for (a = 1; a < argc; a++)
     for (a = 0; a < cnt; a++)
     {
@@ -307,17 +376,17 @@ int main( int argc, char ** argv )
             continue;
         }
 
-        printf("# Processing '%s' shapefile...\n", file.c_str());
+        fprintf(output, "# Processing '%s' shapefile...\n", file.c_str());
 
         /* -------------------------------------------------------------------- */
         /*      Print out the file bounds.                                      */
         /* -------------------------------------------------------------------- */
         SHPGetInfo( hSHP, &nEntities, &nShapeType, adfMinBound, adfMaxBound );
 
-        printf( "# Shapefile Type: %s   # of Shapes: %d\n",
+        fprintf(output, "# Shapefile Type: %s   # of Shapes: %d\n",
                 SHPTypeName( nShapeType ), nEntities );
     
-        printf( "# File Bounds: (%.15g,%.15g,%.15g,%.15g) to  (%.15g,%.15g,%.15g,%.15g)\n",
+        fprintf(output, "# File Bounds: (%.15g,%.15g,%.15g,%.15g) to  (%.15g,%.15g,%.15g,%.15g)\n",
                 adfMinBound[0], 
                 adfMinBound[1], 
                 adfMinBound[2], 
@@ -328,7 +397,9 @@ int main( int argc, char ** argv )
                 adfMaxBound[3] );
 
         if (VERB1) {
-
+            if (xg_color) {
+                fprintf(output, "color %s\n", xg_color);
+            }
             /* -------------------------------------------------------------------- */
             /*	Process the list of shapes, printing all the vertices.	            */
             /* -------------------------------------------------------------------- */
@@ -347,7 +418,7 @@ int main( int argc, char ** argv )
 
                 if (psShape->bMeasureIsUsed) {
                     if (VERB5) {
-                        printf("# Shape:%d (%s)  nVertices=%d, nParts=%d Bounds:(%.15g,%.15g, %.15g, %.15g) to (%.15g,%.15g, %.15g, %.15g)\n",
+                        fprintf(output, "# Shape:%d (%s)  nVertices=%d, nParts=%d Bounds:(%.15g,%.15g, %.15g, %.15g) to (%.15g,%.15g, %.15g, %.15g)\n",
                             i, SHPTypeName(psShape->nSHPType),
                             psShape->nVertices, psShape->nParts,
                             psShape->dfXMin, psShape->dfYMin,
@@ -358,7 +429,7 @@ int main( int argc, char ** argv )
                 }
                 else {
                     if (VERB5) {
-                        printf("# Shape:%d (%s)  nVertices=%d, nParts=%d Bounds:(%.15g,%.15g, %.15g) to (%.15g,%.15g, %.15g)\n",
+                        fprintf(output, "# Shape:%d (%s)  nVertices=%d, nParts=%d Bounds:(%.15g,%.15g, %.15g) to (%.15g,%.15g, %.15g)\n",
                             i, SHPTypeName(psShape->nSHPType),
                             psShape->nVertices, psShape->nParts,
                             psShape->dfXMin, psShape->dfYMin,
@@ -399,23 +470,24 @@ int main( int argc, char ** argv )
 
                     if (psShape->bMeasureIsUsed) {
                         if (pszPartType && *pszPartType && VERB2)
-                            printf("# PartType %s\n", pszPartType);
+                            fprintf(output, "# PartType %s\n", pszPartType);
 
-                        printf("%.15g %.15g\n",
+                        fprintf(output, "%.15g %.15g\n",
                             psShape->padfX[j],
                             psShape->padfY[j]);
                     }
                     else {
                         if (pszPartType && *pszPartType && VERB2)
-                            printf("# PartType %s\n", pszPartType);
+                            fprintf(output, "# PartType %s\n", pszPartType);
 
-                        printf("%.15g %.15g\n",
+                        fprintf(output, "%.15g %.15g\n",
                             psShape->padfX[j],
                             psShape->padfY[j]);
                     }
+                    add_bbox(&b, psShape->padfY[j], psShape->padfX[j]);
                 }
                 if (j)
-                    printf("NEXT\n");
+                    fprintf(output, "NEXT\n");
 
                 SHPDestroyObject(psShape);
 
@@ -424,14 +496,32 @@ int main( int argc, char ** argv )
 
         SHPClose( hSHP );
     }
+    if (add_bounds && bbox_valid(&b)) {
+        fprintf(output, "color gray\n");
+        fprintf(output, "%.15g %.15g\n",
+            b.min_lon, b.min_lat);
+        fprintf(output, "%.15g %.15g\n",
+            b.min_lon, b.max_lat);
+        fprintf(output, "%.15g %.15g\n",
+            b.max_lon, b.max_lat);
+        fprintf(output, "%.15g %.15g\n",
+            b.max_lon, b.min_lat);
+        fprintf(output, "%.15g %.15g\n",
+            b.min_lon, b.min_lat);
+        fprintf(output, "NEXT\n");
+    }
+
     if (!VERB1)
-        printf("# set verbosity to output vertices...(-v[1,2,5,9])\n");
+        fprintf(output, "# set verbosity to output vertices...(-v[1,2,5,9])\n");
 
     vInputs.clear();
 #ifdef USE_DBMALLOC
     malloc_dump(2);
 #endif
 
+    if (out_file) {
+        fclose(output);
+    }
     return 0;
 }
 

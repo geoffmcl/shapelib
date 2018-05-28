@@ -44,3 +44,6 @@ CVS
 # backup files
 *.bak
 *~
+# temporary files
+temp*
+

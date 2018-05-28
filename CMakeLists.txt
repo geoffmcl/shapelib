@@ -31,8 +31,9 @@ project(shapelib)
 # Version 2.8.5 or above of cmake is currently required for all platforms.
 cmake_minimum_required(VERSION 2.8.5 FATAL_ERROR)
 
+### cmake_policy( SET CMP0026 OLD )
+
 # libraries are all shared by default.
-cmake_policy( SET CMP0026 OLD )
 if ( WIN32 )
     option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 else()
@@ -86,6 +87,11 @@ set(
 if (MSVC)
     # to distinguish between debug and release libs
     set( CMAKE_DEBUG_POSTFIX "d" )
+    # clear a stupid MSVC warning....
+    set(WARNING_FLAGS "${WARNING_FLAGS} /wd4996")
+    set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${WARNING_FLAGS} ${MSVC_FLAGS}" )
+    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WARNING_FLAGS} ${MSVC_FLAGS}" )
+    
 endif ()
 
 # Export build information to help other projects link installed
@@ -293,6 +299,17 @@ if (BUILD_CONTRIB_ITEMS)
         link_directories( ${CMAKE_INSTALL_PREFIX}/lib ) # for regex.lib
         list(APPEND add_LIBS regex)
     endif ()
+    ### utility library - common to apps
+    set(name utils)
+    set(dir contrib/utils)
+    set(${name}_SRCS
+        ${dir}/sprtf.cxx
+        ${dir}/sprtf.hxx
+        )
+    add_library( ${name} ${${name}_SRCS} )
+    list(APPEND add_LIBS ${name})
+    ### end utility library - common to apps
+    
     set(name csv2shp)
     set(dir contrib)
     set(${name}_SRCS
@@ -303,6 +320,19 @@ if (BUILD_CONTRIB_ITEMS)
     if (MSVC)
         set_target_properties(${name} PROPERTIES DEBUG_POSTFIX d )
     endif ()
+    ### enhanced version ###
+    set(name csv2shp2)
+    set(dir contrib)
+    set(${name}_SRCS
+        ${dir}/${name}.cxx
+        )
+    add_executable( ${name} ${${name}_SRCS} )
+    target_link_libraries(${name} ${add_LIBS})
+    if (MSVC)
+        set_target_properties(${name} PROPERTIES DEBUG_POSTFIX d )
+    endif ()
+    ##########################
+    
 endif ()
 
 # eof

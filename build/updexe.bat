@@ -8,6 +8,9 @@
 @set TMPEXE=shpdump.exe
 @call :CHKUPD
 
+@set TMPEXE=csv2shp2.exe
+@call :CHKUPD
+
 @goto END
 
 :CHKUPD

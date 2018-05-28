@@ -1,7 +1,9 @@
 @setlocal
 @set VCVERS=14
 @set TMPDRV=X:
-@set DOINST=1
+@if "%DOINT%x" == "x" (
+@set DOINST=0
+)
 @set TMPPRJ=shapelib
 @set TMPLOG=bldlog-1.txt
 @set BUILD_RELDBG=0
@@ -99,9 +101,9 @@
 @REM echo Set OSG_DIR=%OSG_DIR% >> %TMPLOG%
 @REM echo Set BOOST_ROOT=%BOOST_ROOT% >> %TMPLOG%
 
-@echo Do: 'cmake %TMPSRC% %CMOPTS%'
-@echo.
-@%DOPAUSE%
+@REM echo Do: 'cmake %TMPSRC% %CMOPTS%'
+@REM echo.
+@REM %DOPAUSE%
 
 @echo Doing: 'cmake %TMPSRC% %CMOPTS%'
 @echo Doing: 'cmake %TMPSRC% %CMOPTS% >> %TMPLOG%

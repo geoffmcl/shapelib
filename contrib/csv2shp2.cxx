@@ -88,6 +88,7 @@ static const char *usr_input = 0;
 static char delimiter = ',';
 static const char *shp_out_file = 0;
 static int verbosity = 0;
+static const char *xg_file = 0;
 
 #define VERB1 (verbosity >= 1)
 #define VERB2 (verbosity >= 2)
@@ -111,14 +112,20 @@ typedef struct column_t {
 	int nDecimals;
 } column;
 
+typedef struct sPt3D_t {
+    double x, y, z;
+}sPt3D;
+#define M_MX_COLOR 16
 typedef struct spoint_t {
     double x, y, z;
+    char color[M_MX_COLOR];
 }spoint;
 
 typedef std::vector<spoint> vPts;
 
 static vPts vPoints;
-static spoint pt;
+static spoint the_pt;   /* current/trasient/static point */
+#define CLRPT(a) memset(a,0,sizeof(spoint))
 
 /* counts the number of occurances of the character in the string */
 int strnchr(const char *s, char c)
@@ -343,6 +350,8 @@ void give_help(char *name)
     SPRTF(" --help  (-h or -?) = This help and exit(0)\n");
     SPRTF(" --out <file>  (-o) = Set the shapfile output. (def=%s)\n",
         shp_out_file ? shp_out_file : "<none>");
+    SPRTF(" --xg <file>   (-x) = Output xg string to the file. (def=%s)\n",
+        (xg_file) ? "xg_file" : "Off");
     // TODO: More help
 }
 
@@ -401,6 +410,21 @@ int parse_args(int argc, char **argv)
                     SPRTF("%s: Set verbosity to %d\n", module, verbosity);
                 }
                 break;
+            case 'x':
+                if (i2 < argc) {
+                    i++;
+                    sarg = argv[i];
+                    xg_file = strdup(sarg);
+                    if (VERB2) {
+                        SPRTF("%s: Added xg text opt to '%s'.\n", module, xg_file);
+                    }
+                }
+                else {
+                    SPRTF("%s: Error: Expected file name to follow %s! Aborting...", module,
+                        arg);
+                    return 1;
+                }
+                break;
                 // TODO: Other arguments
             default:
                 SPRTF("%s: Unknown argument '%s'. Try -? for help...\n", module, arg);
@@ -427,8 +451,67 @@ int parse_args(int argc, char **argv)
     return 0;
 }
 
+
 static char sbuffer[4096];
 static char szfield[4096];
+
+char *my_strncpy(char *dst, const char * src, size_t count)
+{
+    memset(dst, 0, count);
+    strncpy(dst, src, count);
+    size_t len = strlen(dst);
+    while (len) {
+        len--;
+        if (dst[len] > ' ')
+            break;
+        dst[len] = 0;
+    }
+    return dst;
+}
+
+void write_xg_file(size_t max)
+{
+    size_t ii, len, res;
+    spoint pt;  /* local */
+    char last_color[M_MX_COLOR];
+    FILE *fp = fopen(xg_file, "w");
+    if (fp) {
+        last_color[0] = 0;
+        int cnt = 0;
+        for (ii = 0; ii < max; ii++) {
+            pt = vPoints[ii];
+            if (strcmp(last_color, pt.color)) {
+                // color changed
+                if (cnt) {
+                    fprintf(fp, "NEXT\n");
+                    cnt = 0;
+                }
+                strcpy(last_color, pt.color);
+                fprintf(fp, "color %s\n", last_color);
+            }
+            len = sprintf(sbuffer, "%f %f ; %f %s", pt.x, pt.y, pt.z, pt.color);
+            res = fprintf(fp, "%s\n", sbuffer);
+            cnt++;
+        }
+        if (cnt) {
+            fprintf(fp, "NEXT\n");
+            cnt = 0;
+        }
+        fclose(fp);
+        SPRTF("%s: Vector written to %s. count %d!\n", module, xg_file, (int)max);
+    }
+    else {
+        SPRTF("%s: Failed to create %s!\n", module, xg_file);
+    }
+}
+
+// read hex string as '#112233' hex color....
+double get_color_value(char * color)    // pt[cnt].color
+{
+    double d = 0.0;
+
+    return d;
+}
 
 int main(int argc, char ** argv)
 {
@@ -438,7 +521,9 @@ int main(int argc, char ** argv)
     int n_line;
     int n_longitude = -1; /* column with x, 0 based */
     int n_latitude = -1; /* column with y, 0 based */
-    int n_altitude = -1; /* column with y, 0 based */
+    int n_altitude = -1; /* column with z, 0 based */
+    int n_color = -1; /* column with 'color', 0 based */
+
     int x;
     DBFHandle dbf_h;
     SHPHandle shp_h;
@@ -461,6 +546,7 @@ int main(int argc, char ** argv)
         return (EXIT_FAILURE);
     }
 
+    /* read first header line */
     cp = fgets(sbuffer, 4000, csv_f);
     if (!cp) {
         SPRTF( "%s: Error reading '%s'\n", module, usr_input);
@@ -529,15 +615,18 @@ int main(int argc, char ** argv)
         else if (0 == strcasecmp("altitude", head)) {
             n_altitude = x;
         }
+        else if (0 == strcasecmp("color", head)) {
+            n_color = x;
+        }
     }
 
 #ifdef DEBUG
-    SPRTF("debug: column for lat/lon/alt = %i/%i/%i\n", n_latitude, n_longitude, n_altitude);
+    SPRTF("debug: column for lat/lon/alt/col = %i/%i/%i/%i\n", n_latitude, n_longitude, n_altitude, n_color);
 #endif
 
-    if (-1 == n_longitude || -1 == n_latitude || -1 == n_altitude)
+    if (-1 == n_longitude || -1 == n_latitude || -1 == n_altitude || -1 == n_color)
 	{
-		SPRTF( "The header row must define one each a column named longitude latitude altitude\n");
+		SPRTF( "The header row must define one each a column named longitude,latitude,altitude,color\n");
 		return EXIT_FAILURE;
 	}
 
@@ -551,6 +640,7 @@ int main(int argc, char ** argv)
 	SPRTF("debug: double type = %i\n", FTDouble);
 #endif
     int rows = 0;
+    char *rb = sbuffer;
 	for (x = 0; x <= n_columns; x++)
 	{	
 #ifdef DEBUG
@@ -561,10 +651,18 @@ int main(int argc, char ** argv)
 		columns[x].nDecimals = 0;
 	
 		fseek(csv_f, 0, SEEK_SET);
-		fgets(sbuffer, 4000, csv_f);
+		fgets(rb, 4000, csv_f);
         rows = 0;
 		while (!feof(csv_f))
 		{
+			if (NULL == fgets(rb, 4000, csv_f))
+			{
+				if (!feof(csv_f))
+				{
+					SPRTF( "error during fgets()\n");
+				}
+				continue;
+			}
             rows++;
 #ifdef DEBUG
             if (VERB1) {
@@ -578,22 +676,15 @@ int main(int argc, char ** argv)
                 }
             }
 #endif
-			if (NULL == fgets(sbuffer, 4000, csv_f))
-			{
-				if (!feof(csv_f))
-				{
-					SPRTF( "error during fgets()\n");
-				}
-				continue;
-			}
-			strcpy(szfield, delimited_column(sbuffer, delimiter, x));
+            strcpy(szfield, delimited_column(sbuffer, delimiter, x));
 			if (more_general_field_type(str_to_fieldtype(szfield), columns[x].eType))
 			{
 				columns[x].eType = str_to_fieldtype(szfield);
 				columns[x].nWidth = 2;
 				columns[x].nDecimals = 0;
 				fseek(csv_f, 0, SEEK_SET);
-				fgets(sbuffer, 4000, csv_f);
+				fgets(rb, 4000, csv_f);
+                rows = 0;
 				continue;
 			}
 			if (columns[x].nWidth < str_to_nwidth(szfield, columns[x].eType))
@@ -668,13 +759,23 @@ int main(int argc, char ** argv)
 		// double x_pt, y_pt, z_pt;
 		int shp_i;
 
-		n_line++;
-		fgets(sbuffer, 4000, csv_f);    /* read next file line */
+        if (NULL == fgets(sbuffer, 4000, csv_f))    /* read next file line */
+        {
+            if (!feof(csv_f))
+            {
+                SPRTF("error during fgets()\n");
+            }
+            continue;
+        }
 		
-		/* write to shape file */
+        n_line++;
+        /* write to shape file */
+        spoint pt;
+        CLRPT(&pt);
 		pt.x = atof(delimited_column(sbuffer, delimiter, n_longitude));
 		pt.y = atof(delimited_column(sbuffer, delimiter, n_latitude));
         pt.z = atof(delimited_column(sbuffer, delimiter, n_altitude));  /* add altitude/elevation double */
+        my_strncpy(pt.color, delimited_column(sbuffer, delimiter, n_color), M_MX_COLOR);
         vPoints.push_back(pt);
 
 #ifdef DEBUG
@@ -723,6 +824,93 @@ int main(int argc, char ** argv)
 	SHPClose(shp_h);
 	
     DBFClose(dbf_h);
+
+    size_t max = max = vPoints.size();
+    size_t ii;
+    if (xg_file && max) {
+        write_xg_file(max);
+    }
+
+    /* 20180528: Have a go at creating the shapefile, from a set of 3D+c, wgs84 BTG tris 
+       extracted from the usr_input CSV file, assumed to be set of 3's, triangles,
+       with lon,lat,alt,color[]
+       This is to replace the above, after the data extraction, into a vPoints array...
+       */
+    if (max) {
+        shp_h = 0;
+        dbf_h = 0;
+        SHPObject *shp2 = 0;
+        int shp_i2;
+        spoint pt[4];  /* local */
+        size_t cnt;
+        strcpy(sbuffer, shp_out_file);  // ge current name
+        strcat(sbuffer, "-test");
+        int shpType = SHPT_POLYGONZ;    // SHPT_POLYGON;
+        shp_h = SHPCreate(sbuffer, shpType);   // SHPT_POINT);
+        if (NULL == shp_h)
+        {
+            SPRTF("Error: SHPCreate failed for %s\n",sbuffer);
+            goto Done_Test;
+        }
+
+        dbf_h = DBFCreate(sbuffer);
+        if (NULL == dbf_h)
+        {
+            SPRTF("Error: DBFCreate failed for %s\n", sbuffer);
+            goto Done_Test;
+        }
+        // add polygons, in this case 3 points - x,y,z
+        cnt = 0;
+        double dx[3 + 1];
+        double dy[3 + 1];
+        double dz[3 + 1];
+        double dc[3 + 1];
+        for (ii = 0; ii < max; ii++) {
+            // DBFFieldType
+            cnt = 0;    // get next 3 - it is a tri
+            while (cnt < 3) {
+                pt[cnt] = vPoints[ii];
+                dx[cnt] = pt[cnt].x;
+                dy[cnt] = pt[cnt].y;
+                dz[cnt] = pt[cnt].z;
+                dc[cnt] = get_color_value(pt[cnt].color);
+                ii++;   /* got to next input */
+                if (ii > max)
+                    break;
+                cnt++;
+            }
+            ii--;   /* let the outer loop do the last increment fo this set of 3, a tri */
+            if (cnt != 3) {
+                SPRTF("%s: vector count %d 'not' a multiple of 3! %f\n", module, (int)max, (double)max / 3.0);
+                break;
+            }
+
+            /* got 3 points - a triangle */
+            //shp2 = SHPCreateSimpleObject(shpType, 3, &pt[0].x, &pt[0].y, &pt[0].z);
+            shp2 = SHPCreateSimpleObject(shpType, 3, &dx[0], &dy[0], &dz[0]);
+            shp_i2 = SHPWriteObject(shp_h, -1, shp2);
+            SHPDestroyObject(shp2);
+
+            cnt = 0;
+            /* write to dbf */
+#if 0   // 00000000000000000000000000000000000000000000000000000000000000000000000000
+            b = DBFWriteDoubleAttribute(dbf_h, shp_i2, x, pt[cnt].x);
+            b = DBFWriteStringAttribute(dbf_h, shp_i2, x, pt[cnt].color);
+#endif // #if 0   // 00000000000000000000000000000000000000000000000000000000000000000000000000
+
+        }
+        SPRTF("%s: Written %d records to %s shapefile, x,y,z,c values...\n", module, (int)(max / 3), sbuffer);
+
+    Done_Test:
+        if (shp_h)
+            SHPClose(shp_h);
+        if (dbf_h)
+            DBFClose(dbf_h);
+
+    }
+
+
+
 
 	return EXIT_SUCCESS;
 }

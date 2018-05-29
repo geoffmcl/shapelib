@@ -83,7 +83,7 @@ Springs Rescue Mission does not offer any support for this program.
 #define SPRTF printf
 #endif
 
-static const char *module = "cvs2shp2";
+static const char *module = "csv2shp2";
 
 static const char *usr_input = 0;
 
@@ -114,9 +114,9 @@ typedef struct column_t {
 	int nDecimals;
 } column;
 
-typedef struct sPt3D_t {
-    double x, y, z;
-}sPt3D;
+//typedef struct sPt3D_t {
+//    double x, y, z;
+//}sPt3D;
 #define M_MX_COLOR 16
 typedef struct spoint_t {
     double x, y, z;
@@ -126,7 +126,7 @@ typedef struct spoint_t {
 typedef std::vector<spoint> vPts;
 
 static vPts vPoints;
-static spoint the_pt;   /* current/trasient/static point */
+//static spoint the_pt;   /* current/trasient/static point */
 #define CLRPT(a) memset(a,0,sizeof(spoint))
 
 /* counts the number of occurances of the character in the string */
@@ -327,22 +327,6 @@ void give_version()
     SPRTF("csv2shp2 version 1, Copyright (C) 2018 Geoff R. McLane\n");
 }
 
-void old_help()
-{
-    SPRTF( "csv2shp comes with ABSOLUTELY NO WARRANTY; for details\n");
-    SPRTF( "see csv2shp.c.  This is free software, and you are welcome\n");
-    SPRTF( "to redistribute it under certain conditions; see csv2shp.c\n");
-    SPRTF( "for details\n");
-    SPRTF( "\n");
-    SPRTF( "USAGE\n");
-    SPRTF( "csv2shp csv_filename delimiter_character shp_filename\n");
-    SPRTF( "   csv_filename\n");
-    SPRTF( "     columns named longitude and latitude must exist\n");
-    SPRTF( "   delimiter_character\n");
-    SPRTF( "     one character only\n");
-    SPRTF( "   shp_filename\n");
-    SPRTF( "     base name, do not give the extension\n");
-}
 
 void give_help(char *name)
 {
@@ -354,7 +338,21 @@ void give_help(char *name)
         shp_out_file ? shp_out_file : "<none>");
     SPRTF(" --xg <file>   (-x) = Output xg string to the file. (def=%s)\n",
         (xg_file) ? "xg_file" : "Off");
-    // TODO: More help
+
+    SPRTF("\n");
+    SPRTF("  Given a flat set of lon,lat,alt,color in sets of 3's. That is each is a 3D\n");
+    SPRTF("  triangle, like maybe extracted from a FlightGear terrain KSFO.btg.gz or\n");
+    SPRTF("  test-btg -v2 g:\\S\\Terrain\\e140s40\\e148s32\\5377682.btg.gz -x tempgil.xg -c tempgil.csv,\n");
+    SPRTF("  test the data, writing a simple SHPT_POINT out shapefile, and then with all the points\n");
+    SPRTF("  collected in a vector, writing a SHPT_POLYGONZ, as an out-3D shapefile.\n");
+    SPRTF("\n");
+    SPRTF(" The CSV input must have a head of 'longitude,latitude,altitude,color', and then sets of 3 pts,\n");
+    SPRTF("     148.631622, -31.700828, 286.892307, #ff0000\n");
+    SPRTF("     148.631926, -31.700962, 287.488692, #ff0000\n");
+    SPRTF("     148.631625, -31.700821, 286.900121, #ff0000\n");
+    SPRTF("     ...\n");
+    SPRTF("     for as many triangles that were found in the BTG...\n");
+    SPRTF("\n");
 }
 
 #ifndef ISDIGIT
@@ -518,7 +516,7 @@ double get_color_value(char * color)    // pt[cnt].color
         std::stringstream ss;
         ss << std::hex << hex;
         ss >> x;
-        d = (double)x / (double)(0xffffff + 1);
+        d = (double)x / (double)(0xffffff);
 
     }
 
@@ -764,7 +762,7 @@ int main(int argc, char ** argv)
 
 	n_columns = strnchr(sbuffer, delimiter);
 	n_line = 1;
-
+    int ocnt = 0;
 	while (!feof(csv_f))
 	{
 		SHPObject * shp;
@@ -789,10 +787,17 @@ int main(int argc, char ** argv)
         pt.z = atof(delimited_column(sbuffer, delimiter, n_altitude));  /* add altitude/elevation double */
         my_strncpy(pt.color, delimited_column(sbuffer, delimiter, n_color), M_MX_COLOR);
         vPoints.push_back(pt);
-
+        ocnt++; /* Count another record added */
 #ifdef DEBUG
 		// assumed newline on buffer
-		SPRTF("debug: x,y,z = %f,%f,%f - buf %s", pt.x, pt.y, pt.z, sbuffer);
+        if (VERB9) {
+            SPRTF("debug:[v9] x,y,z = %f,%f,%f - buf %s", pt.x, pt.y, pt.z, sbuffer);
+        }
+        else {
+            if ((ocnt % 1000) == 0) {
+                SPRTF("debug:%d: x,y,z = %f,%f,%f - buf %s", ocnt, pt.x, pt.y, pt.z, sbuffer);
+            }
+        }
 #endif
 
 		shp = SHPCreateSimpleObject(SHPT_POINT, 1, &pt.x, &pt.y, &pt.z);
@@ -846,7 +851,7 @@ int main(int argc, char ** argv)
     /* 20180528: Have a go at creating the shapefile, from a set of 3D+c, wgs84 BTG tris 
        extracted from the usr_input CSV file, assumed to be set of 3's, triangles,
        with lon,lat,alt,color[]
-       This is to replace the above, after the data extraction, into a vPoints array...
+       This is -3D shapefile, after the data extraction, into a vPoints array...
        */
     if (max) {
         shp_h = 0;
@@ -856,7 +861,7 @@ int main(int argc, char ** argv)
         spoint pt[4];  /* local */
         size_t cnt;
         strcpy(sbuffer, shp_out_file);  // ge current name
-        strcat(sbuffer, "-test");
+        strcat(sbuffer, "-3D");
         int shpType = SHPT_POLYGONZ;    // SHPT_POLYGON;
         shp_h = SHPCreate(sbuffer, shpType);   // SHPT_POINT);
         if (NULL == shp_h)
@@ -871,17 +876,63 @@ int main(int argc, char ** argv)
             SPRTF("Error: DBFCreate failed for %s\n", sbuffer);
             goto Done_Test;
         }
-        // add polygons, in this case 3 points - x,y,z
+
+        /* write dbf file
+            Add field header text for each of the column types
+            DBFAddField(dbf_h, col, eType, nWidth, nDecimals))
+        */
+        for (x = 0; x <= n_columns; x++)
+        {
+            int nWidth = 20; //  10;   // columns[x].nWidth = 2;
+            int nDecimals = 16;
+            char *col = "color";
+            DBFFieldType eType = FTDouble;
+            switch (x)
+            {
+            case 0:
+                col = "longitude";
+                break;
+            case 1:
+                col = "latitude";
+                break;
+            case 2:
+                col = "altitude";
+                break;
+            case 3:
+                col = "color";
+                eType = FTString;
+                nWidth = 8;
+                nDecimals = 0;
+                break;
+            }
+#ifdef DEBUG
+            SPRTF("debug: final: column %i, type = %i, w = %i, d = %i, name=|%s|\n", x + 1, eType, nWidth, nDecimals, col);
+#endif
+            if (-1 == DBFAddField(dbf_h, col, eType, nWidth, nDecimals))
+            {
+                SPRTF("Error: DBFFieldAdd failed column %i\n", x + 1);
+                return (EXIT_FAILURE);
+            }
+
+        }
+
+        /* write shp data, and to the dbf */
+        /* add polygons, in this case 3 points - x,y,z,
+           3D triangles, with a color
+        */
+
         cnt = 0;
         double dx[3 + 1];
         double dy[3 + 1];
         double dz[3 + 1];
         double dc[3 + 1];
+        int cnt0 = 0;   /* records consumed */
+        int wrap = 0;
         for (ii = 0; ii < max; ii++) {
-            // DBFFieldType
             cnt = 0;    // get next 3 - it is a tri
             while (cnt < 3) {
-                pt[cnt] = vPoints[ii];
+                pt[cnt] = vPoints[ii];  /* extract the point */
+                /* set up the inputs - array of doubles */
                 dx[cnt] = pt[cnt].x;
                 dy[cnt] = pt[cnt].y;
                 dz[cnt] = pt[cnt].z;
@@ -890,6 +941,9 @@ int main(int argc, char ** argv)
                 if (ii > max)
                     break;
                 cnt++;
+                cnt0++; // records consumed
+                if ((cnt0 % 1000) == 0)
+                    wrap = 1;
             }
             ii--;   /* let the outer loop do the last increment fo this set of 3, a tri */
             if (cnt != 3) {
@@ -898,17 +952,105 @@ int main(int argc, char ** argv)
             }
 
             /* got 3 points - a triangle */
-            //shp2 = SHPCreateSimpleObject(shpType, 3, &pt[0].x, &pt[0].y, &pt[0].z);
-            shp2 = SHPCreateSimpleObject(shpType, 3, &dx[0], &dy[0], &dz[0]);
-            shp_i2 = SHPWriteObject(shp_h, -1, shp2);
-            SHPDestroyObject(shp2);
+            /* Could use - SHPObject SHPCreateObject( int nSHPType, int nShapeId, int nParts,
+                       const int * panPartStart, const int * panPartType,
+                       int nVertices,
+                       const double * padfX, const double * padfY,
+                       const double * padfZ, const double * padfM );
+               and supply all the additional, but for now use SHPCreateSimpleObject
+            */
+            //shp2 = SHPCreateSimpleObject(shpType, 3, &pt[0].x, &pt[0].y, &pt[0].z); // NOT array of doubles
+            shp2 = SHPCreateSimpleObject(shpType, 3, &dx[0], &dy[0], &dz[0]);   /* use the array of 3 doubles */
+            shp_i2 = SHPWriteObject(shp_h, -1, shp2);   /* commit to file */
+            SHPDestroyObject(shp2); /* all done */
 
             cnt = 0;
-            /* write to dbf */
-#if 0   // 00000000000000000000000000000000000000000000000000000000000000000000000000
-            b = DBFWriteDoubleAttribute(dbf_h, shp_i2, x, pt[cnt].x);
-            b = DBFWriteStringAttribute(dbf_h, shp_i2, x, pt[cnt].color);
-#endif // #if 0   // 00000000000000000000000000000000000000000000000000000000000000000000000000
+            /* write to dbf, using 4 components */
+            /* int SHPAPI_CALL DBFWriteDoubleAttribute( DBFHandle hDBF, int iShape, int iField, double dFieldValue ); 
+                traverse the columns, for each tri, write 3
+            */
+            for (x = 0; x <= n_columns; x++)
+            {
+                std::stringstream msg;  /* collect debug only message */
+                char *col = "color";
+                DBFFieldType eType = FTDouble;
+                const char *attr = "Double";
+                switch (x)
+                {
+                case 0:
+                    col = "longitude";
+                    break;
+                case 1:
+                    col = "latitude";
+                    break;
+                case 2:
+                    col = "altitude";
+                    break;
+                case 3:
+                    col = "color";
+                    eType = FTString;
+                    // nWidth = 8;
+                    // nDecimals = 0;
+                    attr = "String";
+                    break;
+                }
+                cnt = 0;    /* set of three - tri */
+                msg << "debug: DBF:" << (ii + 1) << ":";
+                msg << " col " << (x + 1);
+                while (cnt < 3) {
+                    int b = 0;
+                    double d;
+                    switch (x)
+                    {
+                    case 0:
+                        col = "longitude";
+                        d = pt[cnt].x;  /* get lon */
+                        msg << " x=" << d;
+                        break;
+                    case 1:
+                        col = "latitude";
+                        d = pt[cnt].y; /* get lat */
+                        msg << " y=" << d;
+                        break;
+                    case 2:
+                        col = "altitude";
+                        d = pt[cnt].z; /* get alt */
+                        msg << " z=" << d;
+                        break;
+                    case 3:
+                        col = "color";
+                        eType = FTString;
+                        msg << " c=" << pt[cnt].color;
+                        break;
+                    }
+                    if (x == n_columns) {
+                        b = DBFWriteStringAttribute(dbf_h, shp_i2, x, pt[cnt].color);
+                    }
+                    else {
+                        //b = DBFWriteDoubleAttribute(dbf_h, shp_i2, x, pt[cnt].x);
+                        b = DBFWriteDoubleAttribute(dbf_h, shp_i2, x, d);
+                    }
+                    if (!b)
+                    {
+                        SPRTF("Error: col %d DBFWrite%sAttribute failed\n", (x+1), attr);
+                        return (EXIT_FAILURE);
+                    }
+                    cnt++;
+                }
+                cnt0++;
+#ifdef DEBUG
+                if (VERB9) {
+                    SPRTF("%s\n", msg.str().c_str());
+                }
+                else {
+                    if (wrap) { // if ((cnt0 % 1000) == 0) {
+                        SPRTF("%s\n", msg.str().c_str());
+                        wrap = 0;
+                    }
+                }
+#endif
+            }
+            cnt = 0;
 
         }
         SPRTF("%s: Written %d records to %s shapefile, x,y,z,c values...\n", module, (int)(max / 3), sbuffer);

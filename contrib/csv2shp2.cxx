@@ -68,6 +68,8 @@ Springs Rescue Mission does not offer any support for this program.
 #include <string.h>
 #include <vector>
 #include <string>
+#include <iostream>     // std::cout
+#include <sstream>      // std::stringstream
 #include "shapefil.h"
 #include "regex.h"
 #include "utils/sprtf.hxx"
@@ -509,6 +511,16 @@ void write_xg_file(size_t max)
 double get_color_value(char * color)    // pt[cnt].color
 {
     double d = 0.0;
+    char *hex = color;
+    if (hex[0] == '#') {
+        hex++;
+        unsigned int x;
+        std::stringstream ss;
+        ss << std::hex << hex;
+        ss >> x;
+        d = (double)x / (double)(0xffffff + 1);
+
+    }
 
     return d;
 }

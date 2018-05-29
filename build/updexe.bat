@@ -8,6 +8,9 @@
 @set TMPEXE=shpdump.exe
 @call :CHKUPD
 
+@set TMPEXE=dbfdump.exe
+@call :CHKUPD
+
 @set TMPEXE=csv2shp2.exe
 @call :CHKUPD
 
@@ -18,7 +21,7 @@
 @if NOT EXIST %TMPSRC% goto NOEXE
 @call dirmin %TMPSRC%
 @set TMPDST=%TMPDIR%\%TMPEXE%
-@if NOT EXIST %TMPDST% goto DOCOPY
+@if NOT EXIST %TMPDST% goto DOCOPY1
 @call dirmin %TMPDST%
 @fc4 -v0 -q -b %TMPSRC% %TMPDST%
 @if ERRORLEVEL 1 goto DOCOPY
@@ -27,8 +30,11 @@
 @echo.
 @goto END
 
+:DOCOPY1
+@echo No destination %TMPDST% exists...
 :DOCOPY
 @echo Will copy %TMPSRC% to %TMPDST%
+@REM Should make this a y/n, with timeout
 @pause
 copy %TMPSRC% %TMPDST%
 @goto END
